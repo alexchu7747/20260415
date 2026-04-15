@@ -2,12 +2,11 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Brazuca AI V9.2 - 高效极简版</title>
+    <title>Brazuca AI V9.3 - 终极听力版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
     <style>
         :root { --primary: #0b57d0; --bg: #f8f9fa; --surface: #ffffff; --border: #e3e3e3; --radius: 12px; --success: #34a853; }
-        /* 优化1：更换为对葡语显示极佳的无衬线字体组合 */
         body { font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
         .sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 50; }
@@ -25,26 +24,30 @@
         .btn-s { background: white; border: 1px solid var(--border); color: #444; }
         .btn-danger { background: #fce8e6; color: #d93025; }
 
-        .v-layout { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; height: 60vh; }
-        .v-box { background: #000; border-radius: var(--radius); overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }
+        .v-layout { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; height: 60vh; transition: 0.3s; }
+        .v-box { background: #000; border-radius: var(--radius); overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
         video, #yt-player { width: 100%; height: 100%; object-fit: contain; }
-        .s-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-y: auto; padding: 15px; }
+        .s-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-y: auto; padding: 15px; transition: 0.3s; }
         
         .s-line { padding: 12px; border-radius: 8px; cursor: pointer; border-left: 4px solid transparent; margin-bottom: 5px; transition: 0.2s; }
         .s-line:hover { background: #f1f3f4; }
         .s-line.active { background: #e8f0fe; border-left-color: var(--primary); }
         .zh-txt { font-size: 0.9rem; color: #666; margin-top: 4px; }
         
-        /* 优化2：去除了冗余的 padding，修复了单词间距过宽的问题，同时保留交互体验 */
         .word { cursor: pointer; border-radius: 4px; transition: 0.15s; }
         .word:hover { background: #d3e3fd; color: var(--primary); box-shadow: 0 0 0 2px #d3e3fd; }
         .word.known { border-bottom: 2px solid var(--success); font-weight: 500; color: var(--primary); }
 
-        #bottom-sub-bar { position: fixed; bottom: 0; left: 221px; right: 0; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(15px); border-top: 1px solid var(--border); padding: 20px 40px; min-height: 110px; z-index: 100; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.05); cursor: pointer; }
+        #bottom-sub-bar { position: fixed; bottom: 0; left: 221px; right: 0; background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(15px); border-top: 1px solid var(--border); padding: 20px 40px; min-height: 110px; z-index: 100; display: none; flex-direction: column; justify-content: center; align-items: center; text-align: center; box-shadow: 0 -5px 20px rgba(0,0,0,0.05); cursor: pointer; transition: 0.3s; }
         #bottom-sub-bar:hover { background: #fcfdfe; }
 
+        /* 盲听状态类 (仅隐藏中文) */
         .blind-mode .zh-txt, .blind-mode .zh-sub-active { display: none !important; }
         .blind-mode .s-line:hover .zh-txt, .blind-mode #bottom-sub-bar:hover .zh-sub-active { display: block !important; }
+        
+        /* 彻底盲听状态类 (隐藏所有字幕，视频占据满宽) */
+        .pure-blind-hide { display: none !important; }
+        .pure-blind-full { grid-column: 1 / -1 !important; }
 
         .r-paragraph { margin-bottom: 25px; line-height: 1.8; }
         .r-pt-txt { font-size: 1.15rem; color: #222; }
@@ -60,7 +63,7 @@
 <body>
 
     <nav class="sidebar">
-        <div class="logo">Brazuca V9.2</div>
+        <div class="logo">Brazuca V9.3</div>
         <button class="nav-btn active" onclick="showV('video', this)">🎬 视频精听</button>
         <button class="nav-btn" onclick="showV('reading', this)">📖 沉浸精读</button>
         <button class="nav-btn" onclick="showV('corpus', this)">📚 私人语料</button>
@@ -73,7 +76,8 @@
                 <h2 style="margin:0">视频精听舱</h2>
                 <div id="v-ctrl" style="display:none; gap:10px;">
                     <button class="btn btn-danger" onclick="resetVideo()">⬅️ 返回</button>
-                    <button class="btn btn-s" id="blind-btn" onclick="toggleBlind()">👁️ 盲听模式</button>
+                    <button class="btn btn-s" id="blind-btn" onclick="toggleBlind()">👁️ 隐藏译文</button>
+                    <button class="btn btn-s" id="pure-blind-btn" onclick="togglePureBlind()">🎧 彻底盲听</button>
                 </div>
             </div>
 
@@ -199,7 +203,7 @@
         let state = {
             key: localStorage.getItem('bz_key') || '',
             db: JSON.parse(localStorage.getItem('bz_db') || '[]'),
-            subs: [], mode: 'local', ytPlayer: null, syncTimer: null, blind: false, rBlind: false, cur: null
+            subs: [], mode: 'local', ytPlayer: null, syncTimer: null, blind: false, pureBlind: false, rBlind: false, cur: null
         };
 
         function showV(id, btn) {
@@ -207,7 +211,14 @@
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
             document.getElementById(id).classList.add('active');
             if(btn) btn.classList.add('active');
-            document.getElementById('bottom-sub-bar').style.display = (id==='video' && document.getElementById('v-main').style.display === 'grid') ? 'flex':'none';
+            
+            // 切换页面时处理底部字幕栏显示逻辑
+            if(id === 'video' && document.getElementById('v-main').style.display === 'grid') {
+                if(!state.pureBlind) document.getElementById('bottom-sub-bar').style.display = 'flex';
+            } else {
+                document.getElementById('bottom-sub-bar').style.display = 'none';
+            }
+            
             if(id === 'corpus') renderCorpus();
         }
 
@@ -258,13 +269,17 @@
             document.getElementById('v-init').style.display = 'none';
             document.getElementById('v-main').style.display = 'grid';
             document.getElementById('v-ctrl').style.display = 'flex';
-            document.getElementById('bottom-sub-bar').style.display = 'flex';
+            if(!state.pureBlind) document.getElementById('bottom-sub-bar').style.display = 'flex';
         }
 
         function resetVideo() {
             if(state.syncTimer) clearInterval(state.syncTimer);
             if(state.mode==='local') document.getElementById('player').pause();
             else if(state.ytPlayer) state.ytPlayer.pauseVideo();
+            
+            // 退出时如果处于纯净盲听模式，自动恢复
+            if(state.pureBlind) togglePureBlind();
+            
             document.getElementById('v-main').style.display = 'none';
             document.getElementById('v-ctrl').style.display = 'none';
             document.getElementById('bottom-sub-bar').style.display = 'none';
@@ -321,9 +336,68 @@
                 lastIdx = idx;
             }
         }
-        function toggleBlind() { state.blind = !state.blind; document.getElementById('v-main').classList.toggle('blind-mode', state.blind); document.getElementById('bottom-sub-bar').classList.toggle('blind-mode', state.blind); document.getElementById('blind-btn').innerText = state.blind ? '显示译文' : '盲听模式'; }
+        
+        // 旧：仅隐藏译文
+        function toggleBlind() { 
+            state.blind = !state.blind; 
+            document.getElementById('v-main').classList.toggle('blind-mode', state.blind); 
+            document.getElementById('bottom-sub-bar').classList.toggle('blind-mode', state.blind); 
+            document.getElementById('blind-btn').innerText = state.blind ? '显示译文' : '👁️ 隐藏译文'; 
+        }
 
-        // ================== 精读功能 (优化：增加手动模式) ==================
+        // 新：彻底盲听 (隐藏所有字幕区，视频全宽)
+        function togglePureBlind() {
+            state.pureBlind = !state.pureBlind;
+            const sList = document.getElementById('s-list');
+            const vBox = document.getElementById('player-container');
+            const bottomBar = document.getElementById('bottom-sub-bar');
+            const pureBtn = document.getElementById('pure-blind-btn');
+            
+            if(state.pureBlind) {
+                sList.classList.add('pure-blind-hide');
+                bottomBar.classList.add('pure-blind-hide');
+                vBox.classList.add('pure-blind-full');
+                pureBtn.innerText = '📝 恢复字幕';
+                pureBtn.classList.replace('btn-s', 'btn-p');
+            } else {
+                sList.classList.remove('pure-blind-hide');
+                bottomBar.classList.remove('pure-blind-hide');
+                vBox.classList.remove('pure-blind-full');
+                pureBtn.innerText = '🎧 彻底盲听';
+                pureBtn.classList.replace('btn-p', 'btn-s');
+            }
+        }
+
+        // ================== 数据导出导入 ==================
+        function exportData() {
+            const data = { db: state.db, config: { key: state.key }, date: new Date().toISOString() };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Brazuca_Backup_${new Date().toLocaleDateString()}.json`;
+            a.click();
+        }
+
+        function importData(input) {
+            const file = input.files[0];
+            if(!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if(data.db && confirm(`导入 ${data.db.length} 条语料？`)) {
+                        state.db = data.db;
+                        localStorage.setItem('bz_db', JSON.stringify(state.db));
+                        renderCorpus();
+                        alert('导入成功');
+                    }
+                } catch(err) { alert('文件无效'); }
+            };
+            reader.readAsText(file);
+        }
+
+        // ================== 精读功能 ==================
         async function startReading(type) {
             const txt = document.getElementById('r-text').value.trim(); 
             if(!txt) return alert('请先粘贴巴葡原文！');
@@ -334,7 +408,6 @@
 
             const paragraphs = txt.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0);
 
-            // 处理手动模式
             if(type === 'manual') {
                 const zhTxt = document.getElementById('r-text-zh').value.trim();
                 if(!zhTxt) { alert('手动模式请在右侧粘贴译文！'); return resetReading(); }
@@ -348,7 +421,6 @@
                 return;
             }
 
-            // 处理 AI 模式
             const apiKey = state.key.trim();
             if(!apiKey) return alert('请配置 API Key！');
             document.getElementById('r-main').innerHTML = `<div style="text-align:center; padding: 40px 0;"><h3>🚀 AI 正在逐段解析...</h3></div>`;
